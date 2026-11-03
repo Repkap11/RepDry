@@ -19,7 +19,10 @@ out:
 clean:
 	rm -rf out
 
-.PHONY: all clean
+test: out/RepDry
+	test/run_tests.sh
+
+.PHONY: all clean test
 
 out/%.o: src/cpp/%.cpp Makefile | out
 	@#Use g++ to build o file and a dependecy tree .d file for every cpp file

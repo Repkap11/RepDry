@@ -24,10 +24,17 @@ is blocked on this machine by `apparmor_restrict_unprivileged_userns`.
 ```sh
 make            # builds out/RepDry
 make clean      # rm -rf out
+make test       # runs test/run_tests.sh (~110 checks)
 ./out/RepDry -- <cmd>   # smoke test
 ```
 
-There is no unit test suite; run repdry on commands and eyeball the report.
+`test/run_tests.sh` is the end-to-end suite: it exercises the CLI flags,
+the apply/discard prompt, scratch cleanup (incl. SIGKILL), and per-syscall
+attribution. `test/harness.c` is a small C helper compiled on the fly —
+one subcommand per syscall coreutils can't reach (io_uring, sendfile,
+vmsplice, openat2, execveat, xattr, *at variants, sockets…). Test fixtures
+must live under the repo (NOT /tmp — the sandbox binds /tmp to an empty
+dir, hiding host files there).
 
 ## Code map
 

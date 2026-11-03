@@ -451,7 +451,6 @@ static int traceRun( pid_t child, Report &rep, const std::vector<std::regex> &ig
             case SYS_fallocate:
             case SYS_fsetxattr:
             case SYS_fremovexattr:
-            case SYS_futimesat:
                 fdarg = regs.rdi;
                 act = TRUNC;
                 break;
@@ -583,12 +582,13 @@ static int traceRun( pid_t child, Report &rep, const std::vector<std::regex> &ig
                 act = WRITEF;
                 break;
             case SYS_utimensat:
+            case SYS_futimesat:
                 if ( regs.rsi ) {
                     dirfd = regs.rdi;
                     readPathArg( pid, regs.rsi, path );
                     act = WRITEF;
                 } else {
-                    fdarg = regs.rdi; // futimens: NULL path, fd is the file
+                    fdarg = regs.rdi; // NULL path: futimens, fd is the file
                     act = TRUNC;
                 }
                 break;
