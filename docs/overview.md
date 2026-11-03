@@ -12,7 +12,7 @@ The project is now a single program, **RepDry** (`out/RepDry`, source in
 `src/cpp/RepDry.cpp`) — a dry-run sandbox for arbitrary commands:
 
 ```sh
-repdry -- curl -fsSL https://example.com/install.sh | sh
+repdry --allow-net -- sh -c 'curl -fsSL https://example.com/install.sh | sh'
 ```
 
 * The command runs inside **bubblewrap** with the host filesystem bound

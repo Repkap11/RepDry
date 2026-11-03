@@ -9,8 +9,12 @@ the real filesystem (default: discard).
 Think "run `curl | sh` or `make install` and see the diff afterwards".
 
 ```sh
-./out/RepDry -- curl -fsSL https://example.com/install.sh | sh
+./out/RepDry --allow-net -- sh -c 'curl -fsSL https://example.com/install.sh | sh'
 ```
+
+(The pipe has to be inside the sandboxed command — left outside, the host
+shell would run `sh` on repdry's report. `--allow-net` is needed since the
+network is unshared by default.)
 
 ## Usage
 
