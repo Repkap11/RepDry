@@ -1180,7 +1180,7 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
             else
                 deleted.push_back( { p, "by" + fmt( pi.deleters ) + discarded } );
         }
-        // probed = opened-ro/statted but never read, or probed missing
+        // probed = opened-ro/stat'ed but never read, or probed missing
         if ( !pi.probers.empty( ) && ( pi.probed_missing || ( !isRead && !isWrite ) ) ) {
             if ( probeCommon )
                 hidden++;
@@ -1231,7 +1231,7 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
     printSection( "Wrote (traced)", wrote );
     printSection( "Deleted (traced)", deleted );
     printSection( "Read", read );
-    printSection( "Probed or statted only", probed );
+    printSection( "Probed or stat'ed only", probed );
     printSection( "Executed", execs );
     printSection( "Network connects", conns );
     printSection( "io_uring detected", iouring );

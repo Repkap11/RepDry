@@ -79,7 +79,7 @@ with EROFS and show up in the trace.
 Wrote (traced)                 syscall-level view, per-process;
 Deleted (traced)               "(discarded)" = under --ro/--hide, won't apply
 Read
-Probed or statted only          includes "(missing)" for ENOENT probes
+Probed or stat'ed only          includes "(missing)" for ENOENT probes
 Executed
 Network connects               sockaddr rendered per family; IP rows
                                get a "(hostname)" when reverse DNS resolves
