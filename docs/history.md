@@ -73,9 +73,10 @@ dep bookkeeping.
   stop relying on argv position).
 
 The `repshell` remote branch still exists at `5424db9` as a frozen snapshot of
-the simpler pre-merge experiment; `master` is the live code.
+the simpler pre-merge experiment; development has since moved to the
+`repdry` branch (Phase 5).
 
-## Phase 5 — the `repdry` branch (2025)
+## Phase 5 — the `repdry` branch (2026)
 
 RepDry reused the tracer core for a different problem: instead of learning
 build dependencies, run an arbitrary command in a bubblewrap+overlayfs

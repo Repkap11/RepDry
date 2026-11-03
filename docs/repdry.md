@@ -84,6 +84,8 @@ with EROFS and show up in the trace.
 == Probed / statted only ==       includes "(missing)" for ENOENT probes
 == Executed ==
 == Network connects ==            sockaddr rendered per family
+== io_uring detected ==           ring users + registered files;
+                                  per-SQE I/O isn't attributable
 ```
 
 The diff comes from the upper layer; the traced sections attribute each path

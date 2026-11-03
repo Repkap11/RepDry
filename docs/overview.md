@@ -1,4 +1,4 @@
-# RepMake / RepDry Overview
+# RepDry overview
 
 This repository began as **RepMake**, an experiment in automatic dependency
 discovery for build systems: run each build step under a ptrace+seccomp
@@ -21,8 +21,8 @@ repdry -- curl -fsSL https://example.com/install.sh | sh
 * The inherited **ptrace+seccomp tracer** follows the process tree and
   attributes file accesses to processes.
 * Afterwards repdry prints a report — what the command created, modified,
-  deleted, read, probed, and executed — and optionally applies the diff to
-  the real filesystem.
+  deleted, read, probed, and executed — and asks whether to apply the diff
+  to the real filesystem (default: discard).
 
 See [repdry.md](repdry.md) for usage, the overlay planning rules, report
 format, and limitations.
