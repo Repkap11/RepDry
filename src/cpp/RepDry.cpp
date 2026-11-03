@@ -1710,7 +1710,7 @@ int main( int argc, char *argv[] ) {
     bool changes = !diff.created.empty( ) || !diff.modified.empty( ) || !diff.deleted.empty( );
     bool apply = false;
     if ( changes ) {
-        fprintf( stderr, "\napply these changes to the real filesystem? [y/N] " );
+        fprintf( stderr, "apply these changes to the real filesystem? [y/N] " );
         char ans[ 16 ] = { 0 };
         apply = fgets( ans, sizeof ans, stdin ) != NULL && ( ans[ 0 ] == 'y' || ans[ 0 ] == 'Y' );
         if ( !apply )
