@@ -48,7 +48,7 @@ unconfined binaries — but `/usr/bin/bwrap` has an AppArmor exception, which
 is why bwrap is the backend.
 
 **Reporting — ptrace + seccomp cBPF (best-effort attribution).** The existing
-tracer core (`tracer.cpp`, shared with RepShell) follows the bwrap process
+tracer core (`tracer.cpp`, inherited from RepShell) follows the bwrap process
 tree, tracks per-pid cwd and fd→path tables, and classifies syscalls into
 reads / writes / deletes / probes / execs / connects. The report merges this
 with a walk of the overlay uppers (authoritative for created/modified/deleted

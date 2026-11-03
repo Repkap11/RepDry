@@ -1,3 +1,0 @@
-[submodule "libs/antlr4-cpp-runtime"]
-	path = libs/antlr4-cpp-runtime
-	url = git@github.com:adeharo9/antlr4-cpp-runtime.git

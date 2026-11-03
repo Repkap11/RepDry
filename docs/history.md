@@ -1,8 +1,9 @@
 # Project history
 
-The repository went through two distinct architectures. Understanding both
-explains some leftovers in the tree (two grammar files, `include/rules.hpp`'s
-simple shape, `src/antlr/RepMake.g4`).
+The repository went through two distinct architectures (standalone build
+tool, then make-shell wrapper) before landing on the current dry-run
+sandbox, RepDry. This document is historical — everything described in
+phases 1–4 has since been deleted.
 
 ## Phase 1 — RepMake the build tool (Oct 2023, `master` through ~`dbdbc87`)
 
@@ -74,15 +75,20 @@ dep bookkeeping.
 The `repshell` remote branch still exists at `5424db9` as a frozen snapshot of
 the simpler pre-merge experiment; `master` is the live code.
 
-## What survived from each phase
+## Phase 5 — the `repdry` branch (2025)
 
-| From Phase 1 (RepMake) | From Phase 3 (RepShell) |
-|---|---|
-| ANTLR4 + the `libs/antlr4-cpp-runtime` submodule | The `SHELL = RepShell ...` trick |
-| `RepDep.d` as the learned-dep store | sus deps / `REP_SPACE` |
-| The Makefile-style grammar (evolved into `RepShell.g4`) | `--task`/`--ignore`/`--shell` CLI |
-| `trace_tasks.cpp`'s seccomp+ptrace core (now inlined in `RepShell.cpp`) | |
+RepDry reused the tracer core for a different problem: instead of learning
+build dependencies, run an arbitrary command in a bubblewrap+overlayfs
+sandbox and report what it would have changed. With RepDry working, the
+last reason to keep ANTLR disappeared — it was only there so RepShell could
+re-parse `RepDep.d` — so `repdry` deleted:
 
-Things deleted along the way: the rule scheduler and timestamp logic
-(`rules.cpp`, the old `runTasksInOrder`), the `RepMake` build file format, and
-`include/trace_tasks.hpp`.
+* `src/cpp/RepShell.cpp` and the whole `example/` harness,
+* `src/antlr/` (`RepShell.g4` and the legacy `RepMake.g4`) and the
+  `libs/antlr4-cpp-runtime` submodule,
+* `utils.*`, `rules.hpp`, `sys_map.hpp` (RepShell-only helpers),
+* the `docs/usage.md`/`docs/internals.md` RepShell walkthroughs.
+
+What survived: `src/cpp/tracer.cpp`/`include/tracer.hpp` (the
+seccomp+ptrace core, now refactored into a shared `runTracedExec`) and
+`include/logging.hpp`. The repository is RepDry-only.
