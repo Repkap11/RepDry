@@ -39,7 +39,7 @@ dir, hiding host files there).
 ## Code map
 
 * `src/cpp/RepDry.cpp` — everything: arg parsing (`--allow-net`, `--ignore`,
-  `--ro`, `--hide`, `-v`, `--`), mount-aware overlay planning, bwrap argv
+  `--ro`, `--hide`, `-q`/`--quiet`, `-v`, `--`), mount-aware overlay planning, bwrap argv
   construction, per-pid ptrace event loop, upper-layer diff walk, report
   printer, apply-on-confirm.
 * `include/tracer.hpp`, `src/cpp/tracer.cpp` — shared tracer core:

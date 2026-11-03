@@ -7,7 +7,7 @@ without letting it modify the real system. Think "run `curl | sh` or
 ## Usage
 
 ```
-repdry [--allow-net] [-v]
+repdry [--allow-net] [-v] [-q]
        [--ignore REGEX]... [--ro DIR]... [--hide DIR]...
        -- COMMAND [ARGS...]
 ```
@@ -16,6 +16,7 @@ repdry [--allow-net] [-v]
 |---|---|
 | `--allow-net` | share the host network (default: unshared — DNS/connects fail but are still reported) |
 | `--ignore REGEX` | drop matching paths from the report (repeatable, `std::regex_match`) |
+| `-q`, `--quiet` | suppress common low-risk noise in the traced sections (see below) |
 | `--ro DIR` | real contents stay visible, but writes are silently discarded — the payload sees a normal writable fs, the host never changes |
 | `--hide DIR` | contents hidden from the payload entirely (empty tmpfs at DIR); writes discarded. Traced read/write attempts still appear in the report |
 | `-v`, `--verbose` | dump the generated bwrap argv before running |
@@ -90,6 +91,17 @@ Created (sandbox only)         upper-layer diff (authoritative)
 Modified (sandbox only)
 Deleted (sandbox only)
 ```
+
+`-q`/`--quiet` additionally hides traced rows for universally-common runtime
+files — shared libs (`/lib`, `/usr/lib`, ...), ld.so config, NSS files
+(`/etc/passwd`, `/etc/hosts`, `resolv.conf`, ...), locale/zoneinfo/terminfo,
+selinux probes — from the `Read`/`Probed` sections; PATH-scan probes of the
+standard exec dirs and every absolute `$PATH` entry from `Probed`; and
+*all* traced rows under `/dev` (a private tmpfs, so even `>/dev/null`
+"writes" can't reach the host). Writes,
+deletes, execs and connects elsewhere are never suppressed, and the
+`FS changes` sections are always complete. The count of suppressed rows is
+printed at the end of the report.
 
 The diff comes from the upper layer; the traced sections attribute each path
 to `exe(pid)`. Setup noise is suppressed structurally, not by name: bwrap only

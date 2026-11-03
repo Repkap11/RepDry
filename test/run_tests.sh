@@ -254,6 +254,19 @@ check "io_uring registered files listed" 'sec "io_uring detected" | grep -qF "/e
 RD --ignore '.*secretfile.*' -- touch "$P/secretfile.txt"
 check "--ignore drops traced attribution" '! sec "Wrote (traced)" | grep -qF "secretfile"'
 check "--ignore keeps real diff visible" 'sec "Created (sandbox only)" | grep -qF "secretfile"'
+RD -- sh -c "echo hi >/dev/null"
+check "/dev/null write shown w/o -q"     'sec "Wrote (traced)" | grep -qF "/dev/null"'
+RD -q -- cat "$P/src.txt"
+check "-q hides ld.so.cache read"        '! sec "Read" | grep -qF "ld.so.cache"'
+check "-q keeps real reads"              'sec "Read" | grep -qF "src.txt"'
+check "-q reports hidden count"          'grep -q "hidden by --quiet" "$T/out"'
+RD -q -- sh -c "echo hi >/dev/null; echo hi >'$P/dev.txt'"
+check "-q hides /dev/null write"         '! sec "Wrote (traced)" | grep -qF "/dev/null"'
+check "-q keeps real writes"             'sec "Wrote (traced)" | grep -qF "dev.txt"'
+RD -q -- stat /etc/passwd "$P/src.txt"
+check "-q hides /etc/passwd probe"       '! sec "Probed or statted only" | grep -qF "/etc/passwd"'
+check "-q keeps real probes"             'sec "Probed or statted only" | grep -qF "src.txt"'
+check "-q keeps Executed"                'sec "Executed" | grep -qF "bin/stat"'
 RD --ro "$P/rodir" -- sh -c "cat '$P/rodir/orig.txt'; echo changed >'$P/rodir/orig.txt'; cat '$P/rodir/orig.txt'"
 check "--ro: real content readable"      'grep -qF ro-content "$T/out"'
 check "--ro: write reads back in-sandbox" 'grep -qF changed "$T/out"'

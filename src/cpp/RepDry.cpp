@@ -866,6 +866,13 @@ static bool isDir( const std::string &p ) {
 // tmpfs), but nothing under these paths enters the diff or gets applied.
 static std::vector<std::string> g_discard_dirs;
 
+// Dirs whose probes are --quiet-only noise: the standard exec dirs plus
+// every absolute entry of repdry's $PATH (normalized and canonicalized),
+// since statting them during command lookup is pure noise. What actually
+// ran still shows up under "Executed"; reads of scripts under these dirs
+// are still reported. Populated in main().
+static std::vector<std::string> g_probe_noise_dirs;
+
 static bool underAnyDir( const std::vector<std::string> &dirs, const std::string &p ) {
     for ( const auto &d : dirs )
         if ( p == d || startsWith( p, d + "/" ) )
@@ -1100,9 +1107,32 @@ static bool skipPath( const std::string &p, const std::vector<std::regex> &ignor
     return tracer::matchsAnyIgnore( p, ignore );
 }
 
-static void printReport( const Report &rep, const UpperDiff &diff, const std::vector<std::regex> &ignore ) {
+// --quiet paths: universally-touched runtime files whose reads/probes are
+// pure noise (loader, libc, NSS, locale, terminfo). /dev is special: it's a
+// private bwrap tmpfs, so even traced writes/deletes there (e.g. >/dev/null)
+// can never reach the real fs and are always suppressed. For every other
+// path only Read/Probed rows are filtered — a write or delete under /etc or
+// a lib dir is still shown (and lands in the authoritative diff regardless).
+static bool isCommonNoise( const std::string &p ) {
+    static const char *pref[] = {
+        "/dev",       "/lib",           "/lib64",           "/usr/lib",    "/usr/libexec", "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d", "/etc/ld.so.preload",  "/etc/localtime",      "/etc/nsswitch.conf", "/etc/gai.conf",
+        "/etc/hosts", "/etc/host.conf", "/etc/resolv.conf", "/etc/passwd", "/etc/group",   "/etc/selinux",     "/selinux",        "/usr/share/locale", "/usr/share/zoneinfo", "/usr/share/terminfo", "/etc/terminfo" };
+    for ( const char *s : pref ) {
+        if ( p == s || startsWith( p, std::string( s ) + "/" ) )
+            return true;
+    }
+    return false;
+}
+
+// Probed-only extras for --quiet: PATH-scan dirs (g_probe_noise_dirs).
+static bool isProbeNoise( const std::string &p ) {
+    return underAnyDir( g_probe_noise_dirs, p );
+}
+
+static void printReport( const Report &rep, const UpperDiff &diff, const std::vector<std::regex> &ignore, bool quiet ) {
     typedef std::vector<std::pair<std::string, std::string>> Rows;
     Rows wrote, read, probed, deleted;
+    size_t hidden = 0;
     for ( const auto &kv : rep.paths ) {
         const std::string &p = kv.first;
         if ( skipPath( p, ignore ) )
@@ -1117,18 +1147,36 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
         // A path that was written OR read counts as "written/read", not probed
         bool isWrite = !pi.writers.empty( );
         bool isRead = !pi.readers.empty( );
+        bool common = quiet && isCommonNoise( p );
+        bool probeCommon = common || ( quiet && isProbeNoise( p ) );
+        bool dev = common && ( p == "/dev" || startsWith( p, "/dev/" ) );
         // writes under --ro/--hide dirs are discarded — say so, since no
         // amount of accepting the prompt will make them appear
         const char *discarded = underAnyDir( g_discard_dirs, p ) ? "   (discarded)" : "";
-        if ( isWrite )
-            wrote.push_back( { p, "by" + fmt( pi.writers ) + discarded } );
-        if ( isRead )
-            read.push_back( { p, "by" + fmt( pi.readers ) } );
-        if ( !pi.deleters.empty( ) )
-            deleted.push_back( { p, "by" + fmt( pi.deleters ) + discarded } );
+        if ( isWrite ) {
+            if ( dev )
+                hidden++;
+            else
+                wrote.push_back( { p, "by" + fmt( pi.writers ) + discarded } );
+        }
+        if ( isRead ) {
+            if ( common )
+                hidden++;
+            else
+                read.push_back( { p, "by" + fmt( pi.readers ) } );
+        }
+        if ( !pi.deleters.empty( ) ) {
+            if ( dev )
+                hidden++;
+            else
+                deleted.push_back( { p, "by" + fmt( pi.deleters ) + discarded } );
+        }
         // probed = opened-ro/statted but never read, or probed missing
         if ( !pi.probers.empty( ) && ( pi.probed_missing || ( !isRead && !isWrite ) ) ) {
-            probed.push_back( { p, "by" + fmt( pi.probers ) + ( pi.probed_missing ? "   (missing)" : "" ) } );
+            if ( probeCommon )
+                hidden++;
+            else
+                probed.push_back( { p, "by" + fmt( pi.probers ) + ( pi.probed_missing ? "   (missing)" : "" ) } );
         }
     }
     Rows execs, conns, created, modified, deletedfs;
@@ -1176,6 +1224,8 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
     printSection( "Created (sandbox only)", created );
     printSection( "Modified (sandbox only)", modified );
     printSection( "Deleted (sandbox only)", deletedfs );
+    if ( hidden )
+        printf( "\n(%zu common low-risk rows hidden by --quiet)\n", hidden );
     printf( "\n" );
 }
 
@@ -1258,20 +1308,21 @@ static int applyUpper( const std::string &upper, const std::string &dest_root ) 
 // ---------------------------------------------------------------------------
 
 static void usage( ) {
-    fprintf( stderr, "usage: repdry [--allow-net] [-v]\n"
+    fprintf( stderr, "usage: repdry [--allow-net] [-v] [-q]\n"
                      "              [--ignore REGEX]... [--ro DIR]... [--hide DIR]...\n"
                      "              -- COMMAND [ARGS...]\n"
                      "\n"
                      "Run COMMAND inside a bubblewrap sandbox: the host filesystem is\n"
                      "visible read-only via an overlay, so writes land in a scratch dir\n"
                      "instead of touching the real system. Afterwards prints a report of\n"
-                     "everything the command read, wrote, deleted, probed and executed.\n" );
+                     "everything the command read, wrote, deleted, probed and executed.\n"
+                     "-q/--quiet hides common low-risk noise (libs, locale, /dev, ...).\n" );
 }
 
 int main( int argc, char *argv[] ) {
     std::vector<std::regex> ignore;
     std::vector<std::string> ro_dirs, hide_dirs;
-    bool share_net = false, verbose = false;
+    bool share_net = false, verbose = false, quiet = false;
     int i;
     bool foundSep = false;
     for ( i = 1; i < argc; i++ ) {
@@ -1287,6 +1338,8 @@ int main( int argc, char *argv[] ) {
             hide_dirs.emplace_back( canon( argv[ ++i ] ) );
         } else if ( !strcmp( "--verbose", arg ) || !strcmp( "-v", arg ) ) {
             verbose = true;
+        } else if ( !strcmp( "--quiet", arg ) || !strcmp( "-q", arg ) ) {
+            quiet = true;
         } else if ( !strcmp( "--allow-net", arg ) ) {
             share_net = true;
         } else if ( !strcmp( "--help", arg ) || !strcmp( "-h", arg ) ) {
@@ -1303,6 +1356,22 @@ int main( int argc, char *argv[] ) {
         return 1;
     }
     int cmdStart = i + 1;
+
+    // --quiet probe-noise dirs: standard exec dirs + $PATH entries. Report
+    // paths aren't canonicalized, so keep both spellings for symlinked dirs
+    // (/bin -> usr/bin). Relative entries are skipped — "." would make every
+    // stat under cwd "noise".
+    g_probe_noise_dirs = { "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin" };
+    if ( const char *penv = getenv( "PATH" ) ) {
+        std::stringstream ss( penv );
+        std::string d;
+        while ( std::getline( ss, d, ':' ) ) {
+            if ( d.empty( ) || d[ 0 ] != '/' )
+                continue;
+            g_probe_noise_dirs.push_back( normalize( d ) );
+            g_probe_noise_dirs.push_back( canon( d ) );
+        }
+    }
 
     // --- scratch dir ---
     char tmpl[] = "/tmp/repdry.XXXXXX";
@@ -1633,7 +1702,7 @@ int main( int argc, char *argv[] ) {
             walkBoundDeleted( bd.src, bd.dest, "", diff );
     }
 
-    printReport( rep, diff, ignore );
+    printReport( rep, diff, ignore, quiet );
 
     // --- prompt to apply; anything but an explicit "y" discards ---
     bool changes = !diff.created.empty( ) || !diff.modified.empty( ) || !diff.deleted.empty( );
