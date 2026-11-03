@@ -1,6 +1,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <linux/fs.h>
 #include <linux/unistd.h>
 #include <limits.h>
@@ -67,7 +68,8 @@ struct PathInfo {
 struct Report {
     std::map<std::string, PathInfo> paths;
     std::map<std::string, std::set<std::string>> execs;    // exe path -> pids
-    std::map<std::string, std::set<std::string>> connects; // dest -> procs
+    std::map<std::string, std::set<std::string>> connects;   // dest -> procs
+    std::map<std::string, sockaddr_storage> connect_addrs; // dest -> sockaddr, for reverse DNS at report time
     std::set<std::string> iouring; // procs that created/used an io_uring ring
     std::map<std::string, std::set<std::string>> iouring_files; // files registered into a ring
     int child_exit = 0;
@@ -802,6 +804,12 @@ static int traceRun( pid_t child, Report &rep, const std::vector<std::regex> &ig
                     } else {
                         dest = "family=" + std::to_string( sa->sa_family );
                     }
+                    if ( sa->sa_family == AF_INET || sa->sa_family == AF_INET6 ) {
+                        sockaddr_storage ss;
+                        memset( &ss, 0, sizeof ss );
+                        memcpy( &ss, sa, std::min( addrlen, ( int )sizeof ss ) );
+                        rep.connect_addrs[ dest ] = ss;
+                    }
                     rep.connects[ dest ].insert( who );
                 }
                 break;
@@ -1190,7 +1198,16 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
         std::string whos;
         for ( const auto &w : kv.second )
             whos += " " + w;
-        conns.push_back( { kv.first, "by" + whos } );
+        std::string dest = kv.first;
+        auto addr = rep.connect_addrs.find( kv.first );
+        if ( addr != rep.connect_addrs.end( ) ) {
+            const sockaddr_storage &ss = addr->second;
+            socklen_t slen = ss.ss_family == AF_INET ? ( socklen_t )sizeof( sockaddr_in ) : ( socklen_t )sizeof( sockaddr_in6 );
+            char host[ NI_MAXHOST ];
+            if ( getnameinfo( ( const sockaddr * )&ss, slen, host, sizeof host, NULL, 0, NI_NAMEREQD ) == 0 )
+                dest += " (" + std::string( host ) + ")";
+        }
+        conns.push_back( { dest, "by" + whos } );
     }
     Rows iouring;
     for ( const auto &w : rep.iouring )

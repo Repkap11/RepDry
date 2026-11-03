@@ -81,7 +81,8 @@ Deleted (traced)               "(discarded)" = under --ro/--hide, won't apply
 Read
 Probed or statted only          includes "(missing)" for ENOENT probes
 Executed
-Network connects               sockaddr rendered per family
+Network connects               sockaddr rendered per family; IP rows
+                               get a "(hostname)" when reverse DNS resolves
 io_uring detected              ring users + registered files;
                                per-SQE I/O isn't attributable
 ======================================
