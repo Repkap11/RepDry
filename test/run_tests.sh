@@ -147,7 +147,7 @@ RD -- sh -c "cd '$P/sub' && touch rel.txt"
 check "relative path resolved via cwd"   'sec "Created (sandbox only)" | grep -qF "sub/rel.txt"'
 RD -- sh -c "exec 9>'$P/viafd.txt'; echo hi >&9"
 check "dup2'd fd write attributed"       'sec "Wrote (traced)" | grep -qF "viafd.txt"'
-RD -- true
+RD --full -- true
 check "mmap'd ld.so.cache -> Read"       'sec "Read" | grep -qF "ld.so.cache"'
 RD -- touch "$P/x.txt"
 check "Executed shows payload"           'sec "Executed" | grep -qF "bin/touch"'
@@ -254,19 +254,23 @@ check "io_uring registered files listed" 'sec "io_uring detected" | grep -qF "/e
 RD --ignore '.*secretfile.*' -- touch "$P/secretfile.txt"
 check "--ignore drops traced attribution" '! sec "Wrote (traced)" | grep -qF "secretfile"'
 check "--ignore keeps real diff visible" 'sec "Created (sandbox only)" | grep -qF "secretfile"'
-RD -- sh -c "echo hi >/dev/null"
-check "/dev/null write shown w/o -q"     'sec "Wrote (traced)" | grep -qF "/dev/null"'
-RD -q -- cat "$P/src.txt"
-check "-q hides ld.so.cache read"        '! sec "Read" | grep -qF "ld.so.cache"'
-check "-q keeps real reads"              'sec "Read" | grep -qF "src.txt"'
-check "-q reports hidden count"          'grep -q "hidden by --quiet" "$T/out"'
-RD -q -- sh -c "echo hi >/dev/null; echo hi >'$P/dev.txt'"
-check "-q hides /dev/null write"         '! sec "Wrote (traced)" | grep -qF "/dev/null"'
-check "-q keeps real writes"             'sec "Wrote (traced)" | grep -qF "dev.txt"'
-RD -q -- stat /etc/passwd "$P/src.txt"
-check "-q hides /etc/passwd probe"       '! sec "Probed or statted only" | grep -qF "/etc/passwd"'
-check "-q keeps real probes"             'sec "Probed or statted only" | grep -qF "src.txt"'
-check "-q keeps Executed"                'sec "Executed" | grep -qF "bin/stat"'
+RD -- cat "$P/src.txt"
+check "default hides ld.so.cache read"   '! sec "Read" | grep -qF "ld.so.cache"'
+check "default keeps real reads"         'sec "Read" | grep -qF "src.txt"'
+check "default reports hidden count"     'grep -q "common low-risk rows hidden" "$T/out"'
+RD -- sh -c "echo hi >/dev/null; echo hi >'$P/dev.txt'"
+check "default hides /dev/null write"    '! sec "Wrote (traced)" | grep -qF "/dev/null"'
+check "default keeps real writes"        'sec "Wrote (traced)" | grep -qF "dev.txt"'
+RD -- stat /etc/passwd "$P/src.txt"
+check "default hides /etc/passwd read"   '! sec "Read" | grep -qF "/etc/passwd"'
+check "default keeps real probes"        'sec "Probed or statted only" | grep -qF "src.txt"'
+check "default keeps Executed"           'sec "Executed" | grep -qF "bin/stat"'
+RD --full -- sh -c "echo hi >/dev/null"
+check "--full shows /dev/null write"     'sec "Wrote (traced)" | grep -qF "/dev/null"'
+check "--full prints no hidden count"    '! grep -q "common low-risk rows hidden" "$T/out"'
+RD --full -- stat /etc/passwd
+check "--full shows /etc/passwd read"    'sec "Read" | grep -qF "/etc/passwd"'
+check "--full shows ld.so.preload probe" 'sec "Probed or statted only" | grep -qF "/etc/ld.so.preload"'
 RD --ro "$P/rodir" -- sh -c "cat '$P/rodir/orig.txt'; echo changed >'$P/rodir/orig.txt'; cat '$P/rodir/orig.txt'"
 check "--ro: real content readable"      'grep -qF ro-content "$T/out"'
 check "--ro: write reads back in-sandbox" 'grep -qF changed "$T/out"'

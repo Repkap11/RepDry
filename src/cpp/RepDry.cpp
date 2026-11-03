@@ -866,7 +866,7 @@ static bool isDir( const std::string &p ) {
 // tmpfs), but nothing under these paths enters the diff or gets applied.
 static std::vector<std::string> g_discard_dirs;
 
-// Dirs whose probes are --quiet-only noise: the standard exec dirs plus
+// Dirs whose probes are noise-filtered by default (--full opts out): the
 // every absolute entry of repdry's $PATH (normalized and canonicalized),
 // since statting them during command lookup is pure noise. What actually
 // ran still shows up under "Executed"; reads of scripts under these dirs
@@ -1107,8 +1107,9 @@ static bool skipPath( const std::string &p, const std::vector<std::regex> &ignor
     return tracer::matchsAnyIgnore( p, ignore );
 }
 
-// --quiet paths: universally-touched runtime files whose reads/probes are
-// pure noise (loader, libc, NSS, locale, terminfo). /dev is special: it's a
+// Noise-filtered paths (default on; --full opts out): universally-touched
+// runtime files whose reads/probes are pure noise (loader, libc, NSS,
+// locale, terminfo). /dev is special: it's a
 // private bwrap tmpfs, so even traced writes/deletes there (e.g. >/dev/null)
 // can never reach the real fs and are always suppressed. For every other
 // path only Read/Probed rows are filtered — a write or delete under /etc or
@@ -1124,7 +1125,7 @@ static bool isCommonNoise( const std::string &p ) {
     return false;
 }
 
-// Probed-only extras for --quiet: PATH-scan dirs (g_probe_noise_dirs).
+// Probed-only noise-filter extras: PATH-scan dirs (g_probe_noise_dirs).
 static bool isProbeNoise( const std::string &p ) {
     return underAnyDir( g_probe_noise_dirs, p );
 }
@@ -1225,7 +1226,7 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
     printSection( "Modified (sandbox only)", modified );
     printSection( "Deleted (sandbox only)", deletedfs );
     if ( hidden )
-        printf( "\n(%zu common low-risk rows hidden by --quiet)\n", hidden );
+        printf( "\n(%zu common low-risk rows hidden — use --full to show)\n", hidden );
     printf( "\n" );
 }
 
@@ -1308,7 +1309,7 @@ static int applyUpper( const std::string &upper, const std::string &dest_root ) 
 // ---------------------------------------------------------------------------
 
 static void usage( ) {
-    fprintf( stderr, "usage: repdry [--allow-net] [-v] [-q]\n"
+    fprintf( stderr, "usage: repdry [--allow-net] [-v] [--full]\n"
                      "              [--ignore REGEX]... [--ro DIR]... [--hide DIR]...\n"
                      "              -- COMMAND [ARGS...]\n"
                      "\n"
@@ -1316,13 +1317,14 @@ static void usage( ) {
                      "visible read-only via an overlay, so writes land in a scratch dir\n"
                      "instead of touching the real system. Afterwards prints a report of\n"
                      "everything the command read, wrote, deleted, probed and executed.\n"
-                     "-q/--quiet hides common low-risk noise (libs, locale, /dev, ...).\n" );
+                     "Common low-risk noise (libs, locale, /dev, ...) is hidden\n"
+                     "by default; --full shows everything.\n" );
 }
 
 int main( int argc, char *argv[] ) {
     std::vector<std::regex> ignore;
     std::vector<std::string> ro_dirs, hide_dirs;
-    bool share_net = false, verbose = false, quiet = false;
+    bool share_net = false, verbose = false, quiet = true;
     int i;
     bool foundSep = false;
     for ( i = 1; i < argc; i++ ) {
@@ -1338,8 +1340,8 @@ int main( int argc, char *argv[] ) {
             hide_dirs.emplace_back( canon( argv[ ++i ] ) );
         } else if ( !strcmp( "--verbose", arg ) || !strcmp( "-v", arg ) ) {
             verbose = true;
-        } else if ( !strcmp( "--quiet", arg ) || !strcmp( "-q", arg ) ) {
-            quiet = true;
+        } else if ( !strcmp( "--full", arg ) ) {
+            quiet = false;
         } else if ( !strcmp( "--allow-net", arg ) ) {
             share_net = true;
         } else if ( !strcmp( "--help", arg ) || !strcmp( "-h", arg ) ) {
@@ -1357,7 +1359,7 @@ int main( int argc, char *argv[] ) {
     }
     int cmdStart = i + 1;
 
-    // --quiet probe-noise dirs: standard exec dirs + $PATH entries. Report
+    // Noise-filter probe dirs: standard exec dirs + $PATH entries. Report
     // paths aren't canonicalized, so keep both spellings for symlinked dirs
     // (/bin -> usr/bin). Relative entries are skipped — "." would make every
     // stat under cwd "noise".
