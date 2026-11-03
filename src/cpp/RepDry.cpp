@@ -1078,7 +1078,7 @@ static int applyBound( const std::string &src, const std::string &dest, const st
 static void printSection( const char *title, const std::vector<std::string> &lines ) {
     if ( lines.empty( ) )
         return;
-    printf( "\n== %s (%zu) ==\n", title, lines.size( ) );
+    printf( "\n%s (%zu)\n", title, lines.size( ) );
     for ( const auto &l : lines )
         printf( "  %s\n", l.c_str( ) );
 }
@@ -1151,11 +1151,9 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
     for ( const auto &p : diff.deleted )
         deletedfs.push_back( p );
 
-    printf( "\n repdry report" );
-    printf( "\n==============" );
-    printSection( "Created (sandbox only)", created );
-    printSection( "Modified (sandbox only)", modified );
-    printSection( "Deleted (sandbox only)", deletedfs );
+    printf( "\n=============="
+            "\n RepDry Report"
+            "\n==============\n" );
     printSection( "Wrote (traced)", wrote );
     printSection( "Deleted (traced)", deleted );
     printSection( "Read", read );
@@ -1163,6 +1161,13 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
     printSection( "Executed", execs );
     printSection( "Network connects", conns );
     printSection( "io_uring detected", iouring );
+    if ( !created.empty( ) || !modified.empty( ) || !deletedfs.empty( ) )
+        printf( "\n======================================"
+                "\n FS changes below are applied on 'y'"
+                "\n======================================\n" );
+    printSection( "Created (sandbox only)", created );
+    printSection( "Modified (sandbox only)", modified );
+    printSection( "Deleted (sandbox only)", deletedfs );
     printf( "\n" );
 }
 

@@ -45,7 +45,7 @@ check() { # check <desc> <expr>
     fi
 }
 has() { grep -qF -- "$1" "$T/out"; }
-sec() { awk -v t="== $1" 'index($0,t)==1{f=1;next} /^== /{f=0} f' "$T/out"; }
+sec() { awk -v t="$1" 'index($0,t" (")==1{f=1;next} /^[^ ]/ && / \([0-9]+\)$/{f=0} f' "$T/out"; }
 RD()  { printf 'n\n' | "$REPDRY" "$@" >"$T/out" 2>&1; }
 RDY() { printf 'y\n' | "$REPDRY" "$@" >"$T/out" 2>&1; }
 snap() { ls -d /tmp/repdry.* 2>/dev/null | sort; }
