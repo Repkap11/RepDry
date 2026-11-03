@@ -132,17 +132,17 @@ check "mknodat -> Wrote"                 'sec "Wrote (traced)" | grep -qE "fifo 
 RD -- touch -d @0 "$P/src.txt"
 check "utimensat -> Wrote"               'sec "Wrote (traced)" | grep -qE "src\.txt +by touch\("'
 RD -- stat "$P/src.txt"
-check "statx -> Probed"                  'sec "Probed / statted only" | grep -qF "src.txt"'
+check "statx -> Probed"                  'sec "Probed or statted only" | grep -qF "src.txt"'
 RD -- stat "$P/does-not-exist"
-check "missing file -> (missing)"        'sec "Probed / statted only" | grep -qF "(missing)"'
+check "missing file -> (missing)"        'sec "Probed or statted only" | grep -qF "(missing)"'
 RD -- sh -c "[ -e '$P/src.txt' ]"
-check "faccessat -> Probed"              'sec "Probed / statted only" | grep -qF "src.txt"'
+check "faccessat -> Probed"              'sec "Probed or statted only" | grep -qF "src.txt"'
 RD -- ls "$P/sub"
 check "getdents64 -> Read"               'sec "Read" | grep -qE "sub +by ls\("'
 RD -- df "$P"
-check "statfs -> Probed"                 'sec "Probed / statted only" | grep -qF "$P"'
+check "statfs -> Probed"                 'sec "Probed or statted only" | grep -qF "$P"'
 RD -- readlink "$P/dangling.lnk"
-check "readlinkat -> Probed"             'sec "Probed / statted only" | grep -qF "dangling.lnk"'
+check "readlinkat -> Probed"             'sec "Probed or statted only" | grep -qF "dangling.lnk"'
 RD -- sh -c "cd '$P/sub' && touch rel.txt"
 check "relative path resolved via cwd"   'sec "Created (sandbox only)" | grep -qF "sub/rel.txt"'
 RD -- sh -c "exec 9>'$P/viafd.txt'; echo hi >&9"
@@ -191,13 +191,13 @@ check "ftruncate -> Wrote"               'sec "Wrote (traced)" | grep -qF "src.t
 RD -- "$H" legacymeta "$P/src.txt"
 check "utime/utimes/lchown/chown -> Wrote" 'sec "Wrote (traced)" | grep -qF "src.txt"'
 RD -- "$H" legacyprobe "$P/src.txt"
-check "access/stat/lstat -> Probed"      'sec "Probed / statted only" | grep -qF "src.txt"'
+check "access/stat/lstat -> Probed"      'sec "Probed or statted only" | grep -qF "src.txt"'
 RD -- "$H" legacy "$P/src.txt"
 check "link/symlink/rename/unlink"       'sec "Wrote (traced)" | grep -qF "src.txt.r" && sec "Deleted (traced)" | grep -qF "src.txt"'
 RD -- "$H" fstat "$P/src.txt"
-check "fstat -> Probed"                  'sec "Probed / statted only" | grep -qF "src.txt"'
+check "fstat -> Probed"                  'sec "Probed or statted only" | grep -qF "src.txt"'
 RD -- "$H" fstatfs "$P"
-check "fstatfs -> Probed"                'sec "Probed / statted only" | grep -qF "$P"'
+check "fstatfs -> Probed"                'sec "Probed or statted only" | grep -qF "$P"'
 RD -- "$H" getdents "$P/sub"
 check "getdents -> Read"                 'sec "Read" | grep -qF "sub"'
 RD -- "$H" finitmod "$P/src.txt"
@@ -209,7 +209,7 @@ check "fsetxattr et al -> Wrote"         'sec "Wrote (traced)" | grep -qF "src.t
 RD -- "$H" xattrat "$P/src.txt"
 check "setxattrat -> Wrote"              'sec "Wrote (traced)" | grep -qF "src.txt"'
 RD -- "$H" openat2 "$P/src.txt"
-check "openat2 -> Probed"                'sec "Probed / statted only" | grep -qF "src.txt"'
+check "openat2 -> Probed"                'sec "Probed or statted only" | grep -qF "src.txt"'
 RD -- "$H" execveat /bin/true
 check "execveat -> Executed"             'sec "Executed" | grep -qF "bin/true"'
 RD -- "$H" execveat_empty
@@ -237,13 +237,13 @@ check "fcntl F_DUPFD write -> Wrote"     'sec "Wrote (traced)" | grep -qF "fd.tx
 RD -- "$H" fchdirw "$P/sub" fcd.txt
 check "fchdir cwd -> resolved path"      'sec "Wrote (traced)" | grep -qF "sub/fcd.txt"'
 RD -- "$H" mount "$P/sub"
-check "mount -> Probed"                  'sec "Probed / statted only" | grep -qF "sub"'
+check "mount -> Probed"                  'sec "Probed or statted only" | grep -qF "sub"'
 RD -- "$H" umount "$P/sub"
-check "umount2 -> Probed"                'sec "Probed / statted only" | grep -qF "sub"'
+check "umount2 -> Probed"                'sec "Probed or statted only" | grep -qF "sub"'
 RD -- "$H" chroot "$P/sub"
-check "chroot -> Probed"                 'sec "Probed / statted only" | grep -qF "sub"'
+check "chroot -> Probed"                 'sec "Probed or statted only" | grep -qF "sub"'
 RD -- "$H" pivot "$P/sub" "$P"
-check "pivot_root -> Probed"             'sec "Probed / statted only" | grep -qF "sub"'
+check "pivot_root -> Probed"             'sec "Probed or statted only" | grep -qF "sub"'
 RD -- "$H" iouring /etc/hostname /etc/os-release
 check "io_uring detected"                'sec "io_uring detected" | grep -qF "ring I/O invisible"'
 check "io_uring registered files listed" 'sec "io_uring detected" | grep -qF "/etc/hostname"'

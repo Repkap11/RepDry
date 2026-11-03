@@ -1165,7 +1165,7 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
     printSection( "Wrote (traced)", wrote );
     printSection( "Deleted (traced)", deleted );
     printSection( "Read", read );
-    printSection( "Probed / statted only", probed );
+    printSection( "Probed or statted only", probed );
     printSection( "Executed", execs );
     printSection( "Network connects", conns );
     printSection( "io_uring detected", iouring );
