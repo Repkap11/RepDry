@@ -109,28 +109,28 @@ check "hardlink applied"                 '[ -f "$P/hard.lnk" ]'
 # Traced attribution (narrative half)
 # ==========================================================================
 RD -- touch "$P/t.txt"
-check "touch -> Wrote (traced)"          'sec "Wrote (traced)" | grep -qF "t.txt   by touch("'
+check "touch -> Wrote (traced)"          'sec "Wrote (traced)" | grep -qE "t\.txt +by touch\("'
 RD -- cat "$P/src.txt"
-check "cat -> Read (splice path)"        'sec "Read" | grep -qF "src.txt   by cat("'
+check "cat -> Read (splice path)"        'sec "Read" | grep -qE "src\.txt +by cat\("'
 RD -- cp "$P/src.txt" "$P/cp.txt"
-check "cp -> source read"                'sec "Read" | grep -qF "src.txt   by cp("'
-check "cp -> dest write"                 'sec "Wrote (traced)" | grep -qF "cp.txt   by cp("'
+check "cp -> source read"                'sec "Read" | grep -qE "src\.txt +by cp\("'
+check "cp -> dest write"                 'sec "Wrote (traced)" | grep -qE "cp\.txt +by cp\("'
 RD -- cp --reflink "$P/src.txt" "$P/rf.txt"
-check "cp --reflink (FICLONE ioctl)"     'sec "Wrote (traced)" | grep -qF "rf.txt   by cp("'
+check "cp --reflink (FICLONE ioctl)"     'sec "Wrote (traced)" | grep -qE "rf\.txt +by cp\("'
 RD -- rm "$P/mm.txt"
-check "rm -> Deleted (traced)"           'sec "Deleted (traced)" | grep -qF "mm.txt   by rm("'
+check "rm -> Deleted (traced)"           'sec "Deleted (traced)" | grep -qE "mm\.txt +by rm\("'
 RD -- mkdir "$P/mk.txt"
-check "mkdir -> Wrote"                   'sec "Wrote (traced)" | grep -qF "mk.txt   by mkdir("'
+check "mkdir -> Wrote"                   'sec "Wrote (traced)" | grep -qE "mk\.txt +by mkdir\("'
 RD -- ln -s a "$P/ln.txt"
-check "symlinkat -> Wrote"               'sec "Wrote (traced)" | grep -qF "ln.txt   by ln("'
+check "symlinkat -> Wrote"               'sec "Wrote (traced)" | grep -qE "ln\.txt +by ln\("'
 RD -- chmod 600 "$P/src.txt"
-check "fchmodat -> Wrote"                'sec "Wrote (traced)" | grep -qF "src.txt   by chmod("'
+check "fchmodat -> Wrote"                'sec "Wrote (traced)" | grep -qE "src\.txt +by chmod\("'
 RD -- truncate -s 0 "$P/src.txt"
-check "truncate -> Wrote"                'sec "Wrote (traced)" | grep -qF "src.txt   by truncate("'
+check "truncate -> Wrote"                'sec "Wrote (traced)" | grep -qE "src\.txt +by truncate\("'
 RD -- mkfifo "$P/fifo"
-check "mknodat -> Wrote"                 'sec "Wrote (traced)" | grep -qF "fifo   by mkfifo("'
+check "mknodat -> Wrote"                 'sec "Wrote (traced)" | grep -qE "fifo +by mkfifo\("'
 RD -- touch -d @0 "$P/src.txt"
-check "utimensat -> Wrote"               'sec "Wrote (traced)" | grep -qF "src.txt   by touch("'
+check "utimensat -> Wrote"               'sec "Wrote (traced)" | grep -qE "src\.txt +by touch\("'
 RD -- stat "$P/src.txt"
 check "statx -> Probed"                  'sec "Probed / statted only" | grep -qF "src.txt"'
 RD -- stat "$P/does-not-exist"
@@ -138,7 +138,7 @@ check "missing file -> (missing)"        'sec "Probed / statted only" | grep -qF
 RD -- sh -c "[ -e '$P/src.txt' ]"
 check "faccessat -> Probed"              'sec "Probed / statted only" | grep -qF "src.txt"'
 RD -- ls "$P/sub"
-check "getdents64 -> Read"               'sec "Read" | grep -qF "sub   by ls("'
+check "getdents64 -> Read"               'sec "Read" | grep -qE "sub +by ls\("'
 RD -- df "$P"
 check "statfs -> Probed"                 'sec "Probed / statted only" | grep -qF "$P"'
 RD -- readlink "$P/dangling.lnk"

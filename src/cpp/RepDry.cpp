@@ -1075,12 +1075,19 @@ static int applyBound( const std::string &src, const std::string &dest, const st
 // Report
 // ---------------------------------------------------------------------------
 
-static void printSection( const char *title, const std::vector<std::string> &lines ) {
-    if ( lines.empty( ) )
+static void printSection( const char *title, const std::vector<std::pair<std::string, std::string>> &rows ) {
+    if ( rows.empty( ) )
         return;
-    printf( "\n%s (%zu)\n", title, lines.size( ) );
-    for ( const auto &l : lines )
-        printf( "  %s\n", l.c_str( ) );
+    size_t width = 0;
+    for ( const auto &r : rows )
+        width = std::max( width, r.first.size( ) );
+    printf( "\n%s (%zu)\n", title, rows.size( ) );
+    for ( const auto &r : rows ) {
+        if ( r.second.empty( ) )
+            printf( "  %s\n", r.first.c_str( ) );
+        else
+            printf( "  %-*s   %s\n", ( int )width, r.first.c_str( ), r.second.c_str( ) );
+    }
 }
 
 static bool skipPath( const std::string &p, const std::vector<std::regex> &ignore ) {
@@ -1094,7 +1101,8 @@ static bool skipPath( const std::string &p, const std::vector<std::regex> &ignor
 }
 
 static void printReport( const Report &rep, const UpperDiff &diff, const std::vector<std::regex> &ignore ) {
-    std::vector<std::string> wrote, read, probed, deleted;
+    typedef std::vector<std::pair<std::string, std::string>> Rows;
+    Rows wrote, read, probed, deleted;
     for ( const auto &kv : rep.paths ) {
         const std::string &p = kv.first;
         if ( skipPath( p, ignore ) )
@@ -1113,43 +1121,43 @@ static void printReport( const Report &rep, const UpperDiff &diff, const std::ve
         // amount of accepting the prompt will make them appear
         const char *discarded = underAnyDir( g_discard_dirs, p ) ? "   (discarded)" : "";
         if ( isWrite )
-            wrote.push_back( p + "   by" + fmt( pi.writers ) + discarded );
+            wrote.push_back( { p, "by" + fmt( pi.writers ) + discarded } );
         if ( isRead )
-            read.push_back( p + "   by" + fmt( pi.readers ) );
+            read.push_back( { p, "by" + fmt( pi.readers ) } );
         if ( !pi.deleters.empty( ) )
-            deleted.push_back( p + "   by" + fmt( pi.deleters ) + discarded );
+            deleted.push_back( { p, "by" + fmt( pi.deleters ) + discarded } );
         // probed = opened-ro/statted but never read, or probed missing
         if ( !pi.probers.empty( ) && ( pi.probed_missing || ( !isRead && !isWrite ) ) ) {
-            probed.push_back( p + ( pi.probed_missing ? "   (missing) by" : "   by" ) + fmt( pi.probers ) );
+            probed.push_back( { p, "by" + fmt( pi.probers ) + ( pi.probed_missing ? "   (missing)" : "" ) } );
         }
     }
-    std::vector<std::string> execs, conns, created, modified, deletedfs;
+    Rows execs, conns, created, modified, deletedfs;
     for ( const auto &kv : rep.execs ) {
         if ( skipPath( kv.first, ignore ) )
             continue;
-        execs.push_back( kv.first );
+        execs.push_back( { kv.first, "" } );
     }
     for ( const auto &kv : rep.connects ) {
-        std::string s = kv.first + "   by";
+        std::string whos;
         for ( const auto &w : kv.second )
-            s += " " + w;
-        conns.push_back( s );
+            whos += " " + w;
+        conns.push_back( { kv.first, "by" + whos } );
     }
-    std::vector<std::string> iouring;
+    Rows iouring;
     for ( const auto &w : rep.iouring )
-        iouring.push_back( w + "   (ring I/O invisible to trace)" );
+        iouring.push_back( { w, "(ring I/O invisible to trace)" } );
     for ( const auto &kv : rep.iouring_files ) {
-        std::string s = kv.first + "   registered into ring by";
+        std::string whos;
         for ( const auto &w : kv.second )
-            s += " " + w;
-        iouring.push_back( s );
+            whos += " " + w;
+        iouring.push_back( { kv.first, "registered into ring by" + whos } );
     }
     for ( const auto &p : diff.created )
-        created.push_back( p );
+        created.push_back( { p, "" } );
     for ( const auto &p : diff.modified )
-        modified.push_back( p );
+        modified.push_back( { p, "" } );
     for ( const auto &p : diff.deleted )
-        deletedfs.push_back( p );
+        deletedfs.push_back( { p, "" } );
 
     printf( "\n=============="
             "\n RepDry Report"
