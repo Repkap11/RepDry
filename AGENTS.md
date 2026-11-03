@@ -1,4 +1,4 @@
-# AGENTS.md — RepMake / RepShell
+# AGENTS.md — RepMake / RepShell / RepDry
 
 ## What this is
 
@@ -7,6 +7,11 @@ by tracing file-access syscalls. It is used as the `SHELL` in a GNU Makefile;
 each recipe runs under seccomp+ptrace, and the learned dependencies are merged
 into `RepDep.d` (Makefile syntax) which the Makefile `-include`s. Recipes need
 no hand-written prerequisites.
+
+RepDry (`repdry` branch): a dry-run sandbox built on the same tracer. Runs a
+command inside bubblewrap with the host fs read-only + overlayfs uppers in a
+scratch dir, then reports what it read/wrote/deleted/probed/executed and can
+`--commit` the diff. See `docs/repdry.md`.
 
 Full docs live in `docs/`:
 
@@ -18,6 +23,8 @@ Full docs live in `docs/`:
   `RepDep.d` write path, build pipeline.
 * `docs/history.md` — evolution from the old standalone "RepMake" build tool
   (deleted code, `repshell` branch) to the current shell-wrapper design.
+* `docs/repdry.md` — the dry-run sandbox: bwrap+overlay containment, overlay
+  planning rules, report format, limitations.
 
 ## Build & test
 
@@ -25,8 +32,8 @@ Prereqs: `antlr4`, `cmake`, `g++`, `ccache`; `libs/antlr4-cpp-runtime` is a
 git submodule built via cmake into `out/antlr_runtime`.
 
 ```sh
-make            # builds out/RepShell (also generates out/antlr_src from
-                # src/antlr/RepShell.g4)
+make            # builds out/RepShell + out/RepDry (also generates
+                # out/antlr_src from src/antlr/RepShell.g4)
 make dev        # additionally builds example/
 make clean      # rm -rf out
 make valgrind   # run the example under valgrind
@@ -38,10 +45,15 @@ RepShell-wired Makefile) is the de-facto test harness.
 
 ## Code map
 
-* `src/cpp/RepShell.cpp` — the entire program: arg parsing (`--task`,
-  `--shell`, `--ignore`, `--`), `runBash` child setup (seccomp cBPF filter +
-  `PTRACE_TRACEME`), `traceBash` ptrace event loop, `RepDep.d` parse/merge/
-  rewrite under `flock`.
+* `src/cpp/RepShell.cpp` — arg parsing (`--task`, `--shell`, `--ignore`,
+  `--`), `traceBash` ptrace event loop, `RepDep.d` parse/merge/rewrite under
+  `flock`.
+* `src/cpp/RepDry.cpp` — repdry: arg parsing, mount-aware overlay planning,
+  bwrap argv construction, per-pid ptrace event loop, upper-layer diff walk,
+  report printer, `--commit` applier.
+* `include/tracer.hpp`, `src/cpp/tracer.cpp` — shared tracer core:
+  `runTracedExec` (seccomp cBPF + `PTRACE_TRACEME` + exec), `read_file`
+  (PTRACE_PEEKTEXT path reads), `waitForSyscallRet`, `matchsAnyIgnore`.
 * `src/cpp/utils.cpp`, `include/utils.hpp` — string helpers (`str_startsWith`,
   `str_equalsAny`), `flagsToString`.
 * `include/rules.hpp` — `Rule { name, real_deps, sus_deps }`.
@@ -64,6 +76,9 @@ RepShell-wired Makefile) is the de-facto test harness.
   as a literal in `parseExistingRules`).
 * Traced children are filtered to relative paths only — absolute paths, `.`,
   `/tmp`, directories, and `--ignore` matches are excluded from the graph.
+* repdry needs `/usr/bin/bwrap` — direct `unshare` is blocked on this machine
+  by `apparmor_restrict_unprivileged_userns`. ANTLR headers are included via
+  `-isystem` so their warnings don't hit `-Werror`.
 * Debug tracing: uncomment the no-op `pr_debug` defines in `logging.hpp`.
 * `example/fish` is an empty leftover file.
 * Working tree note: the project is experimental/WIP — expect TODOs and dead

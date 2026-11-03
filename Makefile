@@ -20,19 +20,25 @@ CFLAGS_ANTLR += -O3
 CFLAGS_CPP += -g
 # 
 
+COMMON_OBJECTS = out/utils.o out/tracer.o
+ANTLR_OBJECTS = $(patsubst out/antlr_src/%.cpp,out/antlr_out/%.o, $(wildcard out/antlr_src/*.cpp))
+
+OBJECTS_REPSHELL = out/RepShell.o $(COMMON_OBJECTS) $(ANTLR_OBJECTS) out/antlr_runtime/runtime/libantlr4_cpp_runtime.a
+OBJECTS_REPDRY = out/RepDry.o $(COMMON_OBJECTS)
+
 OBJECTS = \
 	$(patsubst src/cpp/%.cpp,out/%.o, $(wildcard src/cpp/*.cpp)) \
-	$(patsubst out/antlr_src/%.cpp,out/antlr_out/%.o, $(wildcard out/antlr_src/*.cpp)) \
+	$(ANTLR_OBJECTS) \
 	out/antlr_runtime/runtime/libantlr4_cpp_runtime.a
 
-INCLUDES_ANTLR = -I libs/antlr4-cpp-runtime/runtime/src/
-INCLUDES_CPP = $(INCLUDES_ANTLR) -I include/  -I out/antlr_src
+INCLUDES_ANTLR = -isystem libs/antlr4-cpp-runtime/runtime/src/
+INCLUDES_CPP = $(INCLUDES_ANTLR) -I include/  -isystem out/antlr_src
 
 DEPS = \
 	$(patsubst src/cpp/%.cpp,out/%.d, $(wildcard src/cpp/*.cpp)) \
 	$(patsubst out/antlr_src/%.cpp,out/antlr_out/%.d, $(wildcard out/antlr_src/*.cpp))
 
-all: out/$(TARGET)
+all: out/$(TARGET) out/RepDry
 
 dev: out/$(TARGET)
 	@cd example && make
@@ -77,8 +83,11 @@ out/antlr_runtime/runtime/libantlr4_cpp_runtime.a: out/antlr_runtime/Makefile
 
 -include $(DEPS)
 
-out/$(TARGET): $(OBJECTS)
-	g++ -flto $(CFLAGS_CPP) $(OBJECTS) -o $@
+out/$(TARGET): $(OBJECTS_REPSHELL)
+	g++ -flto $(CFLAGS_CPP) $(OBJECTS_REPSHELL) -o $@
+
+out/RepDry: $(OBJECTS_REPDRY)
+	g++ -flto $(CFLAGS_CPP) $(OBJECTS_REPDRY) -o $@
 
 
 .PRECIOUS: out/$(TARGET) $(OBJECTS)

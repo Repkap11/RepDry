@@ -32,6 +32,7 @@
 #include "logging.hpp"
 #include "rules.hpp"
 #include "sys_map.hpp"
+#include "tracer.hpp"
 
 #include "RepShellLexer.h"
 #include "RepShellParser.h"
@@ -42,110 +43,9 @@ using namespace antlr4::tree;
 
 #define REP_DEP_FILE_NAME "RepDep.d"
 
-static void runBash( int argc, char *argv[] ) {
-    // pr_debug_raw( "Bash args: " );
-    // for ( int i = 0; i < argc; i++ ) {
-    //     pr_debug_raw( "%s ", argv[ i ] );
-    // }
-    // pr_debug_raw( "\n" );
-
-    /* If open syscall, trace */
-    struct sock_filter filter[] = {
-        BPF_STMT( BPF_LD + BPF_W + BPF_ABS, offsetof( struct seccomp_data, nr ) ),
-        BPF_JUMP( BPF_JMP + BPF_JEQ + BPF_K, SYS_read, 0, 1 ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_TRACE ),
-        BPF_JUMP( BPF_JMP + BPF_JEQ + BPF_K, SYS_openat, 0, 1 ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_TRACE ),
-        BPF_JUMP( BPF_JMP + BPF_JEQ + BPF_K, SYS_access, 0, 1 ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_TRACE ),
-        BPF_JUMP( BPF_JMP + BPF_JEQ + BPF_K, SYS_execve, 0, 1 ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_TRACE ),
-        BPF_JUMP( BPF_JMP + BPF_JEQ + BPF_K, SYS_newfstatat, 0, 1 ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_TRACE ),
-        BPF_JUMP( BPF_JMP + BPF_JEQ + BPF_K, SYS_unlinkat, 0, 1 ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_TRACE ),
-        BPF_STMT( BPF_RET + BPF_K, SECCOMP_RET_ALLOW ),
-    };
-    struct sock_fprog prog = {
-        .len = ( unsigned short )( sizeof( filter ) / sizeof( filter[ 0 ] ) ),
-        .filter = filter,
-    };
-    ptrace( PTRACE_TRACEME, 0, 0, 0 );
-    /* To avoid the need for CAP_SYS_ADMIN */
-    if ( prctl( PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0 ) < 0 ) {
-        perror( "prctl(PR_SET_NO_NEW_PRIVS)" );
-        return;
-    }
-    if ( prctl( PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog ) < 0 ) {
-        perror( "when setting seccomp filter" );
-        return;
-    }
-    kill( getpid( ), SIGSTOP );
-    execvp( argv[ 0 ], argv );
-}
-
-// https://www.alfonsobeato.net/tag/seccomp/
-// https://github.com/alfonsosanchezbeato/ptrace-redirect/blob/master/redir_filter.c
-//  https://github.com/skeeto/ptrace-examples/blob/master/minimal_strace.c
-// register order https://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-and-user-space-f
-static void read_file( pid_t pid, long reg, char *file ) {
-    char *child_addr;
-    unsigned long i;
-
-    child_addr = ( char * )reg;
-
-    do {
-        long val;
-        char *p;
-
-        val = ptrace( PTRACE_PEEKTEXT, pid, child_addr, NULL );
-        if ( val == -1 ) {
-            pr_debug( "PTRACE_PEEKTEXT error: %s", strerror( errno ) );
-            exit( 1 );
-        }
-        child_addr += sizeof( long );
-
-        p = ( char * )&val;
-        for ( i = 0; i < sizeof( long ); ++i, ++file ) {
-            *file = *p++;
-            if ( *file == '\0' )
-                break;
-        }
-    } while ( i == sizeof( long ) );
-}
-
-bool matchsAnyIgnore( const std::string str, const std::vector<std::regex> &ignore ) {
-    std::smatch match;
-    for ( auto &regex : ignore ) {
-        if ( std::regex_match( str, match, regex ) ) {
-            return true;
-        }
-    }
-    return false;
-}
-
-long waitForSyscallRet( pid_t current_pid ) {
-    int status;
-    long syscall_ret = 42;
-    {
-        if ( ptrace( PTRACE_SINGLESTEP, current_pid, 0, 0 ) < 0 ) {
-            pr_debug( "ptrace" );
-            exit( 1 );
-            return 1;
-        }
-        waitpid( current_pid, &status, 0 );
-        struct user_regs_struct regs;
-        if ( ptrace( PTRACE_GETREGS, current_pid, 0, &regs ) == -1 ) {
-            if ( errno == ESRCH ) {
-                pr_debug( "Child is exiting:%d: %s", errno, strerror( errno ) );
-            } else {
-                pr_debug( "Get Regs Error %d: %s", errno, strerror( errno ) );
-            }
-        }
-        syscall_ret = regs.rax;
-    }
-    return syscall_ret;
-}
+static const std::vector<int> trace_syscalls = {
+    SYS_read, SYS_openat, SYS_access, SYS_execve, SYS_newfstatat, SYS_unlinkat,
+};
 
 // Support nested trace?
 // https://stackoverflow.com/questions/2359581/calling-ptrace-inside-a-ptraced-linux-process
@@ -274,7 +174,7 @@ static int traceBash( pid_t child, pid_t current_pid, Rule &new_rules, const std
         std::string orig_file;
         if ( hasPathAddr ) {
             char orig_file_from_addr[ PATH_MAX ];
-            read_file( current_pid, pathAddr, orig_file_from_addr );
+            tracer::read_file( current_pid, pathAddr, orig_file_from_addr );
             orig_file = orig_file_from_addr;
         }
         if ( hasFd ) {
@@ -308,7 +208,7 @@ static int traceBash( pid_t child, pid_t current_pid, Rule &new_rules, const std
             }
             // pr_debug( "WroteFile: orig_file: \"%s\"  resolved: \"%s\"", orig_file, resolved_path );
             // pr_debug( "" );
-            if ( matchsAnyIgnore( orig_file, ignore ) ) {
+            if ( tracer::matchsAnyIgnore( orig_file, ignore ) ) {
                 // Bad file
                 // pr_debug( "Bad file:%s", orig_file );
                 continue;
@@ -328,13 +228,13 @@ static int traceBash( pid_t child, pid_t current_pid, Rule &new_rules, const std
         }
 
         long syscall_ret = 0;
-        //TODO track all syscall_ret per file.
-        // if the final child fails:
-            //make all files sus deps
+        // TODO track all syscall_ret per file.
+        //  if the final child fails:
+        // make all files sus deps
         // if the file child success:
-            //only mark files that exist as sus deps
+        // only mark files that exist as sus deps
         if ( trackFile ) {
-            syscall_ret = waitForSyscallRet( current_pid );
+            syscall_ret = tracer::waitForSyscallRet( current_pid );
             // pr_debug( "Tracking:%ld: %s", syscall_ret, orig_file.c_str( ) );
             fd_path_map[ syscall_ret ] = orig_file;
             new_rules.sus_deps.insert( orig_file ).second;
@@ -401,7 +301,7 @@ bool parseExistingRules( std::set<Rule> &all_rules, const std::vector<std::regex
     std::vector<RepShellParser::Rep_shell_ruleContext *> parseRules = context->rep_shell_rule( );
     for ( RepShellParser::Rep_shell_ruleContext *const parseRule : parseRules ) {
         std::string rule_name = parseRule->rule_name( )->IDENTIFIER( )->getText( );
-        if ( matchsAnyIgnore( rule_name, ignore ) ) {
+        if ( tracer::matchsAnyIgnore( rule_name, ignore ) ) {
             continue;
         }
 
@@ -431,7 +331,7 @@ bool parseExistingRules( std::set<Rule> &all_rules, const std::vector<std::regex
             std::vector<RepShellParser::Rule_nameContext *> parseRealDeps = parseRealDepList->rule_name( );
             for ( RepShellParser::Rule_nameContext *parseRealDep : parseRealDeps ) {
                 std::string parseRealDepName = parseRealDep->IDENTIFIER( )->getText( );
-                if ( matchsAnyIgnore( parseRealDepName, ignore ) ) {
+                if ( tracer::matchsAnyIgnore( parseRealDepName, ignore ) ) {
                     continue;
                 }
                 // pr_debug( "Dep for rule \"%s\": \"%s\" real", rule_name.c_str( ), parseRealDepName.c_str( ) );
@@ -443,7 +343,7 @@ bool parseExistingRules( std::set<Rule> &all_rules, const std::vector<std::regex
             std::vector<RepShellParser::Rule_nameContext *> parseSusDeps = parseSusDepList->rule_name( );
             for ( RepShellParser::Rule_nameContext *parseSusDep : parseSusDeps ) {
                 std::string parseSusDepName = parseSusDep->IDENTIFIER( )->getText( );
-                if ( matchsAnyIgnore( parseSusDepName, ignore ) ) {
+                if ( tracer::matchsAnyIgnore( parseSusDepName, ignore ) ) {
                     continue;
                 }
                 if ( real_deps->find( parseSusDepName ) != real_deps->end( ) ) {
@@ -551,7 +451,7 @@ int main( int argc, char *argv[] ) {
     if ( pid == 0 ) {
         char *shell_copy = strdup( shell );
         argv[ argEndMarker ] = shell_copy;
-        runBash( argc - argEndMarker, &argv[ argEndMarker ] );
+        tracer::runTracedExec( &argv[ argEndMarker ], trace_syscalls );
         free( shell_copy );
         exit( 0 );
     }
